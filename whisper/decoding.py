@@ -32,7 +32,9 @@ def detect_language(model: "Whisper", mel: Tensor, tokenizer: Tokenizer = None) 
     if tokenizer is None:
         tokenizer = get_tokenizer(model.is_multilingual)
     if tokenizer.language is None or tokenizer.language_token not in tokenizer.sot_sequence:
-        raise ValueError(f"This model doesn't have language tokens so it can't perform lang id")
+        raise ValueError(
+            "This model doesn't have language tokens so it can't perform lang id"
+        )
 
     single = mel.ndim == 2
     if single:
@@ -413,14 +415,14 @@ class ApplyTimestampRules(LogitFilter):
 
         # timestamps have to appear in pairs, except directly before EOT; mask logits accordingly
         for k in range(tokens.shape[0]):
-            seq = [t for t in tokens[k, self.sample_begin :].tolist()]
+            seq = list(tokens[k, self.sample_begin :].tolist())
             last_was_timestamp = len(seq) >= 1 and seq[-1] >= self.tokenizer.timestamp_begin
-            penultimate_was_timestamp = len(seq) < 2 or seq[-2] >= self.tokenizer.timestamp_begin
+            if last_was_timestamp:  # has to be non-timestamp
+                penultimate_was_timestamp = len(seq) < 2 or seq[-2] >= self.tokenizer.timestamp_begin
 
-            if last_was_timestamp:
-                if penultimate_was_timestamp:  # has to be non-timestamp
+                if penultimate_was_timestamp:
                     logits[k, self.tokenizer.timestamp_begin :] = -np.inf
-                else:  # cannot be normal text tokens
+                else:
                     logits[k, : self.tokenizer.eot] = -np.inf
 
         # apply the `max_initial_timestamp` option
@@ -495,9 +497,8 @@ class DecodingTask:
     def _verify_options(self, options: DecodingOptions) -> DecodingOptions:
         if options.beam_size is not None and options.best_of is not None:
             raise ValueError("beam_size and best_of can't be given together")
-        if options.temperature == 0:
-            if options.best_of is not None:
-                raise ValueError("best_of with greedy sampling (T=0) is not compatible")
+        if options.temperature == 0 and options.best_of is not None:
+            raise ValueError("best_of with greedy sampling (T=0) is not compatible")
         if options.patience is not None and options.beam_size is None:
             raise ValueError("patience requires beam_size to be given")
         if options.length_penalty is not None and not (0 <= options.length_penalty <= 1):
@@ -507,21 +508,24 @@ class DecodingTask:
 
     def _get_initial_tokens(self) -> Tuple[int]:
         tokens = list(self.sot_sequence)
-        prefix = self.options.prefix
         prompt = self.options.prompt
 
-        if prefix:
+        if prefix := self.options.prefix:
             prefix_tokens = (
-                self.tokenizer.encode(" " + prefix.strip()) if isinstance(prefix, str) else prefix
+                self.tokenizer.encode(f" {prefix.strip()}")
+                if isinstance(prefix, str)
+                else prefix
             )
             if self.sample_len is not None:
                 max_prefix_len = self.n_ctx // 2 - self.sample_len
                 prefix_tokens = prefix_tokens[-max_prefix_len:]
-            tokens = tokens + prefix_tokens
+            tokens += prefix_tokens
 
         if prompt:
             prompt_tokens = (
-                self.tokenizer.encode(" " + prompt.strip()) if isinstance(prompt, str) else prompt
+                self.tokenizer.encode(f" {prompt.strip()}")
+                if isinstance(prompt, str)
+                else prompt
             )
             tokens = [self.tokenizer.sot_prev] + prompt_tokens[-(self.n_ctx // 2 - 1) :] + tokens
 
@@ -572,8 +576,8 @@ class DecodingTask:
         if self.options.language is None or self.options.task == "lang_id":
             lang_tokens, lang_probs = self.model.detect_language(audio_features, self.tokenizer)
             languages = [max(probs, key=probs.get) for probs in lang_probs]
-            if self.options.language is None:
-                tokens[:, self.sot_index + 1] = lang_tokens  # write language tokens
+        if self.options.language is None:
+            tokens[:, self.sot_index + 1] = lang_tokens  # write language tokens
 
         return languages, lang_probs
 

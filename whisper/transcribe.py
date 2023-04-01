@@ -137,7 +137,7 @@ def transcribe(
 
     initial_prompt = decode_options.pop("initial_prompt", None) or []
     if initial_prompt:
-        initial_prompt = tokenizer.encode(" " + initial_prompt.strip())
+        initial_prompt = tokenizer.encode(f" {initial_prompt.strip()}")
         all_tokens.extend(initial_prompt)
 
     def add_segment(
@@ -300,15 +300,15 @@ def cli():
         audio_basename = os.path.basename(audio_path)
 
         # save TXT
-        with open(os.path.join(output_dir, audio_basename + ".txt"), "w", encoding="utf-8") as txt:
+        with open(os.path.join(output_dir, f"{audio_basename}.txt"), "w", encoding="utf-8") as txt:
             write_txt(result["segments"], file=txt)
 
         # save VTT
-        with open(os.path.join(output_dir, audio_basename + ".vtt"), "w", encoding="utf-8") as vtt:
+        with open(os.path.join(output_dir, f"{audio_basename}.vtt"), "w", encoding="utf-8") as vtt:
             write_vtt(result["segments"], file=vtt)
 
         # save SRT
-        with open(os.path.join(output_dir, audio_basename + ".srt"), "w", encoding="utf-8") as srt:
+        with open(os.path.join(output_dir, f"{audio_basename}.srt"), "w", encoding="utf-8") as srt:
             write_srt(result["segments"], file=srt)
 
 
